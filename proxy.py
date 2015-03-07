@@ -2,19 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import webapp
-import urllib
+import urllib2
 
-
-#Opcionales:
-#diccionarios con cabeceras de 2
-
-#BORRAR! toString
 
 class proxyApp(webapp.webApp):
 
     class headers():
 
-        heads = {}
+        def __init__(self):
+            self.heads = {}
 
         def getHeads(self, resource, myUrl, n):
             resource = resource[7:]
@@ -32,7 +28,9 @@ class proxyApp(webapp.webApp):
             return code, html
 
         def toString(self, resource):
-            headers = str(self.heads[resource]).split("\n")
+            headers = self.heads[resource]
+            if str(headers).find("\n") != -1:
+                headers = str(headers).split("\n")
             string = ""
             for head in headers:
                 string = string + "<p>" + head + "</p>"
@@ -41,15 +39,17 @@ class proxyApp(webapp.webApp):
     def __init__(self, hostname, port):
         self.cache = {}
         self.heads1 = self.headers()
+        self.heads2 = self.headers()
         self.heads3 = self.headers()
         self.heads4 = self.headers()
         self.myUrl = "http://" + hostname + ":" + str(port) + "/"
         webapp.webApp.__init__(self, hostname, port)
 
     def parse(self, request):
+        print "REQUEST:"
+        print request
         resource = request.split()[1][1:]
         hs = request.split("\n")[1:]
-        print "RESOURCE:", resource
         return (resource, hs)
 
     def processContent(self, content, url, request):
@@ -63,7 +63,8 @@ class proxyApp(webapp.webApp):
             </p><p><a href=" + self.myUrl + request + ">Recargar</a></p>\
             <p><a href=" + self.myUrl + "cache/" + request + ">Cache</a></p>\
             <p><a href=" + self.myUrl + "heads1/" + request + ">Cabeceras1</a>\
-            </p><p><a href=" + self.myUrl + "heads3/" + request + ">Cabeceras3\
+            </p><a href=" + self.myUrl + "heads2/" + request + ">Cabeceras2\
+            </a><p><a href=" + self.myUrl + "heads3/" + request + ">Cabeceras3\
             </a></p><p><a href=" + self.myUrl + "heads4/" + request + \
             ">Cabeceras4</a></p>" + html2
         return html
@@ -72,7 +73,9 @@ class proxyApp(webapp.webApp):
         url = "http://" + resource
         print "url: " + url
         try:
-            urlDescriptor = urllib.urlopen(url)
+            self.heads1.heads[resource] = headers
+            request = urllib2.Request(url, None, self.heads1.heads)
+            urlDescriptor = urllib2.urlopen(request)
         except IOError:
             print "url does not exist"
             return ("404 Not Found", "<html><body><h1> 404 Not Found</h1> \
@@ -82,11 +85,11 @@ class proxyApp(webapp.webApp):
         try:
             code = str(urlDescriptor.getcode())
             self.cache[resource] = html
-            self.heads1.heads[resource] = headers
+            self.heads2.heads[resource] = self.heads1.heads[resource]
             self.heads3.heads[resource] = urlDescriptor.info()
             self.heads4.heads[resource] = self.heads3.heads[resource]
             code = code + "\n" + str(self.heads3.heads[resource])
-            self.heads1.toString(resource)
+            urlDescriptor.close()
             return (code, html)
         except ValueError:
             return ("500", "<html><body><h1> 500 Intern Error</h1> \
@@ -115,6 +118,9 @@ class proxyApp(webapp.webApp):
         elif resource.startswith("heads1/"):
             print "asking for headers 1"
             (code, html) = self.heads1.getHeads(resource, self.myUrl, 1)
+        elif resource.startswith("heads2/"):
+            print "asking for headers 2"
+            (code, html) = self.heads2.getHeads(resource, self.myUrl, 2)
         elif resource.startswith("heads3/"):
             print "asking for headers 3"
             (code, html) = self.heads3.getHeads(resource, self.myUrl, 3)
